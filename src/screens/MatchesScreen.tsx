@@ -6,6 +6,7 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { MatchCard } from '../components/MatchCard';
@@ -28,6 +29,7 @@ export function MatchesScreen() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [filter, setFilter] = useState<FilterType>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const { isFavorite, toggle } = useFavorites();
 
@@ -61,17 +63,32 @@ export function MatchesScreen() {
   }, [loadMatches]);
 
   const filteredMatches = useMemo(() => {
-    if (filter === 'upcoming') {
-      // К предстоящим относим несыгранные матчи, а также live (актуальные для тура)
-      return matches.filter(
-        (m) => m.status === 'scheduled' || m.status === 'live' || m.status === 'postponed'
-      );
-    }
-    if (filter === 'finished') {
-      return matches.filter((m) => m.status === 'finished');
-    }
-    return matches;
-  }, [matches, filter]);
+    const query = searchQuery.trim().toLowerCase();
+
+    return matches.filter((m) => {
+      // Фильтр по статусу матча
+      if (filter === 'upcoming') {
+        const isUpcoming =
+          m.status === 'scheduled' || m.status === 'live' || m.status === 'postponed';
+        if (!isUpcoming) return false;
+      } else if (filter === 'finished') {
+        if (m.status !== 'finished') return false;
+      }
+
+      // Поиск по названию клуба или города
+      if (query) {
+        const matchesHome =
+          m.home.name.toLowerCase().includes(query) ||
+          m.home.city.toLowerCase().includes(query);
+        const matchesAway =
+          m.away.name.toLowerCase().includes(query) ||
+          m.away.city.toLowerCase().includes(query);
+        if (!matchesHome && !matchesAway) return false;
+      }
+
+      return true;
+    });
+  }, [matches, filter, searchQuery]);
 
   if (loading && !refreshing) {
     return (
@@ -114,6 +131,27 @@ export function MatchesScreen() {
         </View>
       </View>
 
+      <View style={styles.searchBar}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Поиск по клубу или городу..."
+          placeholderTextColor="#9ca3af"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          clearButtonMode="while-editing"
+        />
+        {searchQuery.length > 0 && (
+          <Pressable
+            style={styles.searchClearBtn}
+            onPress={() => setSearchQuery('')}
+            hitSlop={8}
+            accessibilityLabel="Очистить поиск"
+          >
+            <Text style={styles.searchClearText}>✕</Text>
+          </Pressable>
+        )}
+      </View>
+
       <View style={styles.filterContainer}>
         {FILTERS.map((item) => {
           const isActive = filter === item.type;
@@ -153,7 +191,11 @@ export function MatchesScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Матчи не найдены</Text>
+            <Text style={styles.emptyText}>
+              {searchQuery.trim()
+                ? `По запросу «${searchQuery.trim()}» матчи не найдены`
+                : 'Матчи не найдены'}
+            </Text>
           </View>
         }
       />
@@ -235,6 +277,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#0284c7',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    height: 40,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#111827',
+    paddingVertical: 0,
+  },
+  searchClearBtn: {
+    padding: 4,
+  },
+  searchClearText: {
+    fontSize: 14,
+    color: '#9ca3af',
   },
   filterContainer: {
     flexDirection: 'row',
